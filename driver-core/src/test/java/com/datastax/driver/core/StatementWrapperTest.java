@@ -131,7 +131,7 @@ public class StatementWrapperTest extends CCMBridge.PerClassSingleNodeCluster {
     /**
      * A retry policy that counts how many times it has seen the custom wrapper for UNAVAILABLE errors.
      */
-    static class CustomRetryPolicy implements RetryPolicy {
+    static class CustomRetryPolicy implements ExtendedRetryPolicy {
         final AtomicInteger customStatementsHandled = new AtomicInteger();
 
         @Override
@@ -150,5 +150,11 @@ public class StatementWrapperTest extends CCMBridge.PerClassSingleNodeCluster {
         public RetryDecision onWriteTimeout(Statement statement, ConsistencyLevel cl, WriteType writeType, int requiredAcks, int receivedAcks, int nbRetry) {
             return RetryDecision.rethrow();
         }
+
+        @Override
+        public RetryDecision onRequestError(Statement statement, ConsistencyLevel cl, int nbRetry) {
+            return RetryDecision.tryNextHost(cl);
+        }
+
     }
 }

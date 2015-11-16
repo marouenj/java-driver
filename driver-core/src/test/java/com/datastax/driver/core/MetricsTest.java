@@ -16,7 +16,7 @@
 package com.datastax.driver.core;
 
 import com.datastax.driver.core.Metrics.Errors;
-import com.datastax.driver.core.policies.RetryPolicy;
+import com.datastax.driver.core.policies.ExtendedRetryPolicy;
 import com.datastax.driver.core.policies.RetryPolicy.RetryDecision;
 import com.google.common.collect.Lists;
 import org.testng.annotations.Test;
@@ -30,7 +30,7 @@ public class MetricsTest extends CCMBridge.PerClassSingleNodeCluster {
 
     @Override
     protected Cluster.Builder configure(Cluster.Builder builder) {
-        return builder.withRetryPolicy(new RetryPolicy() {
+        return builder.withRetryPolicy(new ExtendedRetryPolicy() {
             @Override
             public RetryDecision onReadTimeout(Statement statement, ConsistencyLevel cl, int requiredResponses, int receivedResponses, boolean dataRetrieved, int nbRetry) {
                 return retryDecision;
@@ -45,6 +45,12 @@ public class MetricsTest extends CCMBridge.PerClassSingleNodeCluster {
             public RetryDecision onUnavailable(Statement statement, ConsistencyLevel cl, int requiredReplica, int aliveReplica, int nbRetry) {
                 return retryDecision;
             }
+
+            @Override
+            public RetryDecision onRequestError(Statement statement, ConsistencyLevel cl, int nbRetry) {
+                return retryDecision;
+            }
+
         });
     }
 
