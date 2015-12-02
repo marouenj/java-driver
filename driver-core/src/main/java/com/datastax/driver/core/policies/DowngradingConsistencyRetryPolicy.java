@@ -72,12 +72,15 @@ public class DowngradingConsistencyRetryPolicy implements RetryPolicy {
 
     private DowngradingConsistencyRetryPolicy() {}
 
-    private RetryDecision maxLikelyToWorkCL(int knownOk) {
+    private RetryDecision maxLikelyToWorkCL(int knownOk, ConsistencyLevel currentCL) {
         if (knownOk >= 3)
             return RetryDecision.retry(ConsistencyLevel.THREE);
         else if (knownOk == 2)
             return RetryDecision.retry(ConsistencyLevel.TWO);
-        else if (knownOk == 1)
+        // JAVA-1005: EACH_QUORUM does not report a global number of alive replicas
+        // so even if we get 0 alive replicas, there might be
+        // a node up in some other datacenter
+        else if (knownOk == 1 || currentCL == ConsistencyLevel.EACH_QUORUM)
             return RetryDecision.retry(ConsistencyLevel.ONE);
         else
             return RetryDecision.rethrow();
@@ -118,7 +121,7 @@ public class DowngradingConsistencyRetryPolicy implements RetryPolicy {
 
         if (receivedResponses < requiredResponses) {
             // Tries the biggest CL that is expected to work
-            return maxLikelyToWorkCL(receivedResponses);
+            return maxLikelyToWorkCL(receivedResponses, cl);
         }
 
         return !dataRetrieved ? RetryDecision.retry(cl) : RetryDecision.rethrow();
@@ -160,7 +163,7 @@ public class DowngradingConsistencyRetryPolicy implements RetryPolicy {
             case UNLOGGED_BATCH:
                 // Since only part of the batch could have been persisted,
                 // retry with whatever consistency should allow to persist all
-                return maxLikelyToWorkCL(receivedAcks);
+                return maxLikelyToWorkCL(receivedAcks, cl);
             case BATCH_LOG:
                 return RetryDecision.retry(cl);
         }
@@ -192,6 +195,6 @@ public class DowngradingConsistencyRetryPolicy implements RetryPolicy {
             return RetryDecision.rethrow();
 
         // Tries the biggest CL that is expected to work
-        return maxLikelyToWorkCL(aliveReplica);
+        return maxLikelyToWorkCL(aliveReplica, cl);
     }
 }

@@ -28,10 +28,7 @@ import static org.mockito.Mockito.times;
 
 import com.datastax.driver.core.*;
 
-import static com.datastax.driver.core.ConsistencyLevel.ALL;
-import static com.datastax.driver.core.ConsistencyLevel.ONE;
-import static com.datastax.driver.core.ConsistencyLevel.QUORUM;
-import static com.datastax.driver.core.ConsistencyLevel.TWO;
+import static com.datastax.driver.core.ConsistencyLevel.*;
 
 /**
  * Note: we can't extend {@link AbstractRetryPolicyIntegrationTest} here, because SCassandra doesn't allow custom values for
@@ -39,6 +36,11 @@ import static com.datastax.driver.core.ConsistencyLevel.TWO;
  * If that becomes possible in the future, we could refactor this test.
  */
 public class DowngradingConsistencyRetryPolicyIntegrationTest {
+
+    private static final String CREATE_KEYSPACE = "CREATE KEYSPACE test WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3}";
+    private static final String CREATE_TABLE = "CREATE TABLE test.foo(k int primary key)";
+    private static final String READ_QUERY = "SELECT * FROM test.foo WHERE k = 0";
+    private static final String WRITE_QUERY = "INSERT INTO test.foo(k) VALUES (0)";
 
     @Test(groups = "long")
     public void should_downgrade_if_not_enough_replicas_for_requested_CL() {
@@ -53,30 +55,30 @@ public class DowngradingConsistencyRetryPolicyIntegrationTest {
                 .build();
             Session session = cluster.connect();
 
-            session.execute("CREATE KEYSPACE test WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3}");
-            session.execute("CREATE TABLE test.foo(k int primary key)");
-            session.execute("INSERT INTO test.foo(k) VALUES (0)");
+            session.execute(CREATE_KEYSPACE);
+            session.execute(CREATE_TABLE);
+            session.execute(WRITE_QUERY);
 
             // All replicas up: should achieve all levels without downgrading
-            checkAchievedConsistency(ALL, ALL, session);
-            checkAchievedConsistency(QUORUM, QUORUM, session);
-            checkAchievedConsistency(ONE, ONE, session);
+            checkAchievedConsistency(READ_QUERY, ALL, ALL, session);
+            checkAchievedConsistency(READ_QUERY, QUORUM, QUORUM, session);
+            checkAchievedConsistency(READ_QUERY, ONE, ONE, session);
 
             ccm.stop(1);
             ccm.waitForDown(1);
             // Two replicas remaining: should downgrade to 2 when CL > 2
-            checkAchievedConsistency(ALL, TWO, session);
-            checkAchievedConsistency(QUORUM, QUORUM, session); // since RF = 3, quorum is still achievable with two nodes
-            checkAchievedConsistency(TWO, TWO, session);
-            checkAchievedConsistency(ONE, ONE, session);
+            checkAchievedConsistency(READ_QUERY, ALL, TWO, session);
+            checkAchievedConsistency(READ_QUERY, QUORUM, QUORUM, session); // since RF = 3, quorum is still achievable with two nodes
+            checkAchievedConsistency(READ_QUERY, TWO, TWO, session);
+            checkAchievedConsistency(READ_QUERY, ONE, ONE, session);
 
             ccm.stop(2);
             ccm.waitForDown(2);
             // One replica remaining: should downgrade to 1 when CL > 1
-            checkAchievedConsistency(ALL, ONE, session);
-            checkAchievedConsistency(QUORUM, ONE, session);
-            checkAchievedConsistency(TWO, ONE, session);
-            checkAchievedConsistency(ONE, ONE, session);
+            checkAchievedConsistency(READ_QUERY, ALL, ONE, session);
+            checkAchievedConsistency(READ_QUERY, QUORUM, ONE, session);
+            checkAchievedConsistency(READ_QUERY, TWO, ONE, session);
+            checkAchievedConsistency(READ_QUERY, ONE, ONE, session);
 
         } finally {
             if (cluster != null)
@@ -86,11 +88,47 @@ public class DowngradingConsistencyRetryPolicyIntegrationTest {
         }
     }
 
-    private void checkAchievedConsistency(ConsistencyLevel requested, ConsistencyLevel expected, Session session) {
+    @Test(groups = "long")
+    public void should_downgrade_EACH_QUORUM_to_ONE() {
+        CCMBridge ccm = null;
+        Cluster cluster = null;
+        try {
+            // 2 DC cluster, keyspace with RF = 3
+            ccm = CCMBridge.builder(this.getClass().getName()).withNodes(3, 3).build();
+            cluster = Cluster.builder()
+                .addContactPoint(CCMBridge.ipOfNode(1))
+                .withLoadBalancingPolicy(DCAwareRoundRobinPolicy.builder().withLocalDc("dc1").withUsedHostsPerRemoteDc(1).build())
+                .withRetryPolicy(Mockito.spy(DowngradingConsistencyRetryPolicy.INSTANCE))
+                .build();
+            Session session = cluster.connect();
+
+            session.execute(CREATE_KEYSPACE);
+            session.execute(CREATE_TABLE);
+
+            // shut down DC 1 - cannot achieve EACH_QUORUM
+            ccm.stop(1);
+            ccm.stop(2);
+            ccm.stop(3);
+            ccm.waitForDown(1);
+            ccm.waitForDown(2);
+            ccm.waitForDown(3);
+
+            // EACH_QUORUM is only supported for writes
+            checkAchievedConsistency(WRITE_QUERY, EACH_QUORUM, ONE, session);
+
+        } finally {
+            if (cluster != null)
+                cluster.close();
+            if (ccm != null)
+                ccm.remove();
+        }
+    }
+
+    private void checkAchievedConsistency(String query, ConsistencyLevel requested, ConsistencyLevel expected, Session session) {
         RetryPolicy retryPolicy = session.getCluster().getConfiguration().getPolicies().getRetryPolicy();
         Mockito.reset(retryPolicy);
 
-        Statement s = new SimpleStatement("SELECT * FROM test.foo WHERE k = 0")
+        Statement s = new SimpleStatement(query)
             .setConsistencyLevel(requested);
 
         ResultSet rs = session.execute(s);

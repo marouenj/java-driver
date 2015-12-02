@@ -6,6 +6,7 @@
 - [bug] JAVA-983: QueryBuilder cannot handle collections containing function calls.
 - [improvement] JAVA-863: Idempotence propagation in PreparedStatements.
 - [bug] JAVA-937: TypeCodec static initializers not always correctly executed.
+- [bug] JAVA-1005: DowngradingConsistencyRetryPolicy does not work with EACH_QUORUM when 1 DC is down.
 
 Merged from 2.0 branch:
 
