@@ -133,7 +133,7 @@ public class AbstractRetryPolicyIntegrationTest {
 
     protected void assertOnRequestErrorWasCalled(int times) {
         Mockito.verify((ExtendedRetryPolicy)retryPolicy, times(times)).onRequestError(
-            any(Statement.class), any(ConsistencyLevel.class), anyInt());
+            any(Statement.class), any(ConsistencyLevel.class), any(Exception.class), anyInt());
     }
 
     protected void assertQueried(int hostNumber, int times) {
