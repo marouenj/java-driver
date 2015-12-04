@@ -15,19 +15,20 @@
  */
 package com.datastax.driver.core.policies;
 
+import com.datastax.driver.core.*;
+import com.datastax.driver.core.exceptions.DriverException;
+import com.datastax.driver.core.exceptions.DriverInternalError;
+import com.datastax.driver.core.exceptions.NoHostAvailableException;
+import com.datastax.driver.core.exceptions.WriteTimeoutException;
+import org.assertj.core.api.Fail;
+import org.scassandra.http.client.ClosedConnectionConfig;
 import org.scassandra.http.client.PrimingRequest;
-import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
-import static org.scassandra.http.client.PrimingRequest.Result.overloaded;
-import static org.scassandra.http.client.PrimingRequest.Result.server_error;
 import static org.scassandra.http.client.PrimingRequest.Result.write_request_timeout;
 import static org.scassandra.http.client.PrimingRequest.then;
-
-import com.datastax.driver.core.*;
-import com.datastax.driver.core.exceptions.*;
 
 /**
  * Integration test with an IdempotenceAwareRetryPolicy.
@@ -118,13 +119,6 @@ public class IdempotenceAwareRetryPolicyIntegrationTest extends AbstractRetryPol
         }
     }
 
-    @DataProvider
-    public static Object[][] serverSideErrors() {
-        return new Object[][]{
-            {server_error, ServerError.class},
-            {overloaded  , OverloadedException.class}
-        };
-    }
 
     @Test(groups = "short", dataProvider = "serverSideErrors")
     public void should_not_retry_on_server_error_if_statement_non_idempotent(PrimingRequest.Result error, Class<? extends DriverException> exception) {
@@ -168,6 +162,56 @@ public class IdempotenceAwareRetryPolicyIntegrationTest extends AbstractRetryPol
         assertQueried(2, 1);
         assertQueried(3, 1);
     }
+
+
+    @Test(groups = "short", dataProvider = "connectionErrors")
+    public void should_not_retry_on_connection_error_if_statement_non_idempotent(ClosedConnectionConfig.CloseType closeType) {
+        simulateError(1, PrimingRequest.Result.closed_connection, new ClosedConnectionConfig(closeType));
+        simulateError(2, PrimingRequest.Result.closed_connection, new ClosedConnectionConfig(closeType));
+        simulateError(3, PrimingRequest.Result.closed_connection, new ClosedConnectionConfig(closeType));
+        try {
+            query();
+            Fail.fail("expected an error");
+        } catch (DriverInternalError e) {
+            assertThat(e.getCause().getMessage()).isEqualTo(
+                    String.format("[%s:9042] Connection has been closed", host1.getAddress())
+            );
+        }
+        assertOnRequestErrorWasCalled(1);
+        assertThat(errors.getRetries().getCount()).isEqualTo(0);
+        assertThat(errors.getConnectionErrors().getCount()).isEqualTo(1);
+        assertThat(errors.getIgnoresOnConnectionError().getCount()).isEqualTo(0);
+        assertThat(errors.getRetriesOnConnectionError().getCount()).isEqualTo(0);
+        assertQueried(1, 1);
+        assertQueried(2, 0);
+        assertQueried(3, 0);
+    }
+
+
+    @Test(groups = "short", dataProvider = "connectionErrors")
+    public void should_retry_on_connection_error_if_statement_idempotent(ClosedConnectionConfig.CloseType closeType) {
+        simulateError(1, PrimingRequest.Result.closed_connection, new ClosedConnectionConfig(closeType));
+        simulateError(2, PrimingRequest.Result.closed_connection, new ClosedConnectionConfig(closeType));
+        simulateError(3, PrimingRequest.Result.closed_connection, new ClosedConnectionConfig(closeType));
+        try {
+            session.execute(new SimpleStatement("mock query").setIdempotent(true));
+            Fail.fail("expected a NoHostAvailableException");
+        } catch (NoHostAvailableException e) {
+            assertThat(e.getErrors().keySet()).hasSize(3).containsOnly(
+                    host1.getSocketAddress(),
+                    host2.getSocketAddress(),
+                    host3.getSocketAddress());
+        }
+        assertOnRequestErrorWasCalled(3);
+        assertThat(errors.getRetries().getCount()).isEqualTo(3);
+        assertThat(errors.getConnectionErrors().getCount()).isEqualTo(3);
+        assertThat(errors.getIgnoresOnConnectionError().getCount()).isEqualTo(0);
+        assertThat(errors.getRetriesOnConnectionError().getCount()).isEqualTo(3);
+        assertQueried(1, 1);
+        assertQueried(2, 1);
+        assertQueried(3, 1);
+    }
+
 
     /**
      * Retries everything on the next host.
