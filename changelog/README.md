@@ -8,6 +8,7 @@
 - [bug] JAVA-937: TypeCodec static initializers not always correctly executed.
 - [improvement] JAVA-989: Include keyspace name when invalid replication found when generating token map.
 - [improvement] JAVA-664: Reduce heap consumption for TokenMap.
+- [improvement] JAVA-833: Improve message when a nested type can't be serialized.
 
 Merged from 2.0 branch:
 
