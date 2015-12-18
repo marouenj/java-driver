@@ -53,7 +53,11 @@ public class CCMBridge {
 
     static final String CASSANDRA_VERSION;
 
+    static final String DSE_VERSION;
+
     static final String CASSANDRA_INSTALL_ARGS;
+
+    static final boolean IS_DSE;
 
     public static final String DEFAULT_CLIENT_TRUSTSTORE_PASSWORD = "cassandra1sfun";
     public static final String DEFAULT_CLIENT_TRUSTSTORE_PATH = "/client.truststore";
@@ -92,15 +96,29 @@ public class CCMBridge {
 
     static {
         CASSANDRA_VERSION = System.getProperty("cassandra.version");
+        DSE_VERSION = System.getProperty("dse.version");
         String installDirectory = System.getProperty("cassandra.directory");
         String branch = System.getProperty("cassandra.branch");
+
+        IS_DSE = DSE_VERSION != null;
+
+        StringBuilder installArgs = new StringBuilder();
         if (installDirectory != null && !installDirectory.trim().isEmpty()) {
-            CASSANDRA_INSTALL_ARGS = "--install-dir=" + new File(installDirectory).getAbsolutePath();
+            installArgs.append("--install-dir=");
+            installArgs.append(new File(installDirectory).getAbsolutePath());
         } else if (branch != null && !branch.trim().isEmpty()) {
-            CASSANDRA_INSTALL_ARGS = "-v git:" + branch;
+            installArgs.append("-v git:");
+            installArgs.append(branch);
         } else {
-            CASSANDRA_INSTALL_ARGS = "-v " + CASSANDRA_VERSION;
+            installArgs.append("-v");
+            installArgs.append(IS_DSE ? DSE_VERSION : CASSANDRA_VERSION);
         }
+
+        if (IS_DSE) {
+            installArgs.append(" --dse");
+        }
+
+        CASSANDRA_INSTALL_ARGS = installArgs.toString();
 
         String ip_prefix = System.getProperty("ipprefix");
         if (ip_prefix == null || ip_prefix.isEmpty()) {
@@ -147,9 +165,13 @@ public class CCMBridge {
 
     private final File ccmDir;
 
-    private CCMBridge() {
+    private final boolean isDSE;
+
+    private CCMBridge(boolean isDSE) {
         this.ccmDir = Files.createTempDir();
+        this.isDSE = isDSE;
     }
+
 
     /**
      * <p>
@@ -257,9 +279,9 @@ public class CCMBridge {
 
     public void bootstrapNode(int n, String dc) {
         if (dc == null)
-            execute(CCM_COMMAND + " add node%d -i %s%d -j %d -r %d -b -s", n, IP_PREFIX, n, 7000 + 100 * n, 8000 + 100 * n);
+            execute(CCM_COMMAND + " add node%d -i %s%d -j %d -r %d -b -s" + (isDSE ? " --dse" : ""), n, IP_PREFIX, n, 7000 + 100 * n, 8000 + 100 * n);
         else
-            execute(CCM_COMMAND + " add node%d -i %s%d -j %d -b -d %s -s", n, IP_PREFIX, n, 7000 + 100 * n, dc);
+            execute(CCM_COMMAND + " add node%d -i %s%d -j %d -b -d %s -s" + (isDSE ? " --dse" : ""), n, IP_PREFIX, n, 7000 + 100 * n, dc);
         execute(CCM_COMMAND + " node%d start --wait-other-notice --wait-for-binary-proto", n);
     }
 
@@ -268,7 +290,7 @@ public class CCMBridge {
         String storageItf = IP_PREFIX + n + ":" + storagePort;
         String binaryItf = IP_PREFIX + n + ":" + binaryPort;
         String remoteLogItf = IP_PREFIX + n + ":" + remoteDebugPort;
-        execute(CCM_COMMAND + " add node%d -i %s%d -b -t %s -l %s --binary-itf %s -j %d -r %s -s",
+        execute(CCM_COMMAND + " add node%d -i %s%d -b -t %s -l %s --binary-itf %s -j %d -r %s -s" + (isDSE ? " --dse" : ""),
                 n, IP_PREFIX, n, thriftItf, storageItf, binaryItf, jmxPort, remoteLogItf);
         execute(CCM_COMMAND + " node%d start --wait-other-notice --wait-for-binary-proto", n);
     }
@@ -283,6 +305,18 @@ public class CCMBridge {
             confStr.append(entry.getKey() + ":" + entry.getValue() + " ");
         }
         execute(CCM_COMMAND + " updateconf " + confStr);
+    }
+
+    public void updateDSEConfig(Map<String, String> configs) {
+        StringBuilder confStr = new StringBuilder();
+        for (Map.Entry<String, String> entry : configs.entrySet()) {
+            confStr.append(entry.getKey() + ":" + entry.getValue() + " ");
+        }
+        execute(CCM_COMMAND + " updatedseconf " + confStr);
+    }
+
+    public void setWorkload(int node, String workload) {
+        execute(CCM_COMMAND + " node%d setworkload %s", node, workload);
     }
 
     private void execute(String command, Object... args) {
@@ -618,8 +652,10 @@ public class CCMBridge {
         private final String clusterName;
         private Integer[] nodes = {1};
         private boolean start = true;
+        private boolean isDSE = IS_DSE;
         private String cassandraInstallArgs = CASSANDRA_INSTALL_ARGS;
         private String[] startOptions = new String[0];
+
         private Map<String, String> cassandraConfiguration = Maps.newHashMap();
 
 
@@ -665,6 +701,13 @@ public class CCMBridge {
          */
         public Builder withCassandraVersion(String cassandraVersion) {
             this.cassandraInstallArgs = "-v " + cassandraVersion;
+            this.isDSE = false;
+            return this;
+        }
+
+        public Builder withDSEVersion(String dseVersion) {
+            this.cassandraInstallArgs = "-v " + dseVersion + " --dse";
+            this.isDSE = true;
             return this;
         }
 
@@ -685,7 +728,7 @@ public class CCMBridge {
         }
 
         public CCMBridge build() {
-            CCMBridge ccm = new CCMBridge();
+            CCMBridge ccm = new CCMBridge(isDSE);
             ccm.execute(buildCreateCommand());
             ccm.updateConfig(cassandraConfiguration);
             if (start)

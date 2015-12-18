@@ -396,7 +396,8 @@ public abstract class TestUtils {
         String version = System.getProperty("cassandra.version");
         String[] versionArray = version.split("\\.|-");
         double major = Double.parseDouble(versionArray[0] + "." + versionArray[1]);
-        int minor = Integer.parseInt(versionArray[2]);
+        // If there is no minor version, assume latest version of whatever was provided.
+        int minor = versionArray.length >= 3 ? Integer.parseInt(versionArray[2]) : Integer.MAX_VALUE;
 
         if (major < majorCheck || (major == majorCheck && minor < minorCheck)) {
             throw new SkipException("Version >= " + majorCheck + "." + minorCheck + " required.  Description: " + skipString);
