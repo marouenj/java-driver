@@ -51,13 +51,11 @@ public class CCMBridge {
 
     public static final String IP_PREFIX;
 
-    static final String CASSANDRA_VERSION;
+    private static final String CASSANDRA_VERSION;
 
-    static final String DSE_VERSION;
+    private static final String CASSANDRA_INSTALL_ARGS;
 
-    static final String CASSANDRA_INSTALL_ARGS;
-
-    static final boolean IS_DSE;
+    private static final boolean IS_DSE;
 
     public static final String DEFAULT_CLIENT_TRUSTSTORE_PASSWORD = "cassandra1sfun";
     public static final String DEFAULT_CLIENT_TRUSTSTORE_PATH = "/client.truststore";
@@ -90,17 +88,59 @@ public class CCMBridge {
     private static final Map<String, String> ENVIRONMENT_MAP;
 
     /**
+     * A mapping of full DSE versions to their C* counterpart.  This is not meant to be comprehensive.  Used by
+     * {@link #getCassandraVersion()}.  If C* version cannot be derived, the method makes a 'best guess'.
+     */
+    private static final Map<String, String> dseToCassandraVersions = ImmutableMap.<String, String>builder()
+            .put("5.0", "3.0")
+            .put("4.8.3", "2.1.11")
+            .put("4.8.2", "2.1.11")
+            .put("4.8.1", "2.1.11")
+            .put("4.8", "2.1.9")
+            .put("4.7.6", "2.1.11")
+            .put("4.7.5", "2.1.11")
+            .put("4.7.4", "2.1.11")
+            .put("4.7.3", "2.1.8")
+            .put("4.7.2", "2.1.8")
+            .put("4.7.1", "2.1.5")
+            .put("4.6.11", "2.0.16")
+            .put("4.6.10", "2.0.16")
+            .put("4.6.9", "2.0.16")
+            .put("4.6.8", "2.0.16")
+            .put("4.6.7", "2.0.14")
+            .put("4.6.6", "2.0.14")
+            .put("4.6.5", "2.0.14")
+            .put("4.6.4", "2.0.14")
+            .put("4.6.3", "2.0.12")
+            .put("4.6.2", "2.0.12")
+            .put("4.6.1", "2.0.12")
+            .put("4.6", "2.0.11")
+            .put("4.5.9", "2.0.16")
+            .put("4.5.8", "2.0.14")
+            .put("4.5.7", "2.0.12")
+            .put("4.5.6", "2.0.12")
+            .put("4.5.5", "2.0.12")
+            .put("4.5.4", "2.0.11")
+            .put("4.5.3", "2.0.11")
+            .put("4.5.2", "2.0.10")
+            .put("4.5.1", "2.0.8")
+            .put("4.5", "2.0.8")
+            .put("4.0", "2.0")
+            .put("3.2", "1.2")
+            .put("3.1", "1.2")
+            .build();
+
+    /**
      * The command to use to launch CCM
      */
     private static final String CCM_COMMAND;
 
     static {
         CASSANDRA_VERSION = System.getProperty("cassandra.version");
-        DSE_VERSION = System.getProperty("dse.version");
         String installDirectory = System.getProperty("cassandra.directory");
         String branch = System.getProperty("cassandra.branch");
 
-        IS_DSE = DSE_VERSION != null;
+        IS_DSE = Boolean.parseBoolean(System.getProperty("dse", "false"));
 
         StringBuilder installArgs = new StringBuilder();
         if (installDirectory != null && !installDirectory.trim().isEmpty()) {
@@ -111,7 +151,7 @@ public class CCMBridge {
             installArgs.append(branch);
         } else {
             installArgs.append("-v");
-            installArgs.append(IS_DSE ? DSE_VERSION : CASSANDRA_VERSION);
+            installArgs.append(CASSANDRA_VERSION);
         }
 
         if (IS_DSE) {
@@ -172,6 +212,62 @@ public class CCMBridge {
         this.isDSE = isDSE;
     }
 
+    /**
+     * @return The configured cassandra version.  If -Ddse=true was used, this value is derived from the
+     * DSE version provided.  If the DSE version can't be derived the following logic is used:
+     * <ol>
+     * <li>If <= 3.X, use C* 1.2</li>
+     * <li>If 4.X, use 2.1 for >= 4.7, 2.0 otherwise.</li>
+     * <li>Otherwise 3.0</li>
+     * </ol>
+     */
+    public static String getCassandraVersion() {
+        if (isDSE()) {
+            String cassandraVersion = dseToCassandraVersions.get(CASSANDRA_VERSION);
+            if (cassandraVersion != null) {
+                return cassandraVersion;
+            } else if (CASSANDRA_VERSION.startsWith("3.") || CASSANDRA_VERSION.compareTo("3") <= 0) {
+                return "1.2";
+            } else if (CASSANDRA_VERSION.startsWith("4.")) {
+                if (CASSANDRA_VERSION.compareTo("4.7") >= 0) {
+                    return "2.0";
+                } else {
+                    return "2.1";
+                }
+            } else {
+                // Fallback on 3.0 by default.
+                return "3.0";
+            }
+
+        } else {
+            return CASSANDRA_VERSION;
+        }
+    }
+
+    /**
+     * @return The configured DSE version if '-Ddse=true' specified, otherwise null.
+     */
+    public static String getDSEVersion() {
+        if (isDSE()) {
+            return CASSANDRA_VERSION;
+        } else {
+            return null;
+        }
+    }
+
+    /**
+     * @return Whether or not DSE was configured via '-Ddse=true'.
+     */
+    public static boolean isDSE() {
+        return IS_DSE;
+    }
+
+    /**
+     * @return The install arguments to pass to CCM when creating the cluster.
+     */
+    public static String getInstallArguments() {
+        return CASSANDRA_INSTALL_ARGS;
+    }
 
     /**
      * <p>
@@ -658,6 +754,8 @@ public class CCMBridge {
 
         private Map<String, String> cassandraConfiguration = Maps.newHashMap();
 
+        private Map<String, String> dseConfiguration = Maps.newHashMap();
+
 
         Builder(String clusterName) {
             this.clusterName = clusterName;
@@ -727,10 +825,18 @@ public class CCMBridge {
             return this;
         }
 
+        public Builder withDSEConfiguration(String key, String value) {
+            this.dseConfiguration.put(key, value);
+            return this;
+        }
+
         public CCMBridge build() {
             CCMBridge ccm = new CCMBridge(isDSE);
             ccm.execute(buildCreateCommand());
-            ccm.updateConfig(cassandraConfiguration);
+            if (!cassandraConfiguration.isEmpty())
+                ccm.updateConfig(cassandraConfiguration);
+            if (!dseConfiguration.isEmpty())
+                ccm.updateDSEConfig(dseConfiguration);
             if (start)
                 ccm.start();
             return ccm;
