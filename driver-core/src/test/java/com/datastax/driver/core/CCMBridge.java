@@ -140,7 +140,10 @@ public class CCMBridge {
         String installDirectory = System.getProperty("cassandra.directory");
         String branch = System.getProperty("cassandra.branch");
 
-        IS_DSE = Boolean.parseBoolean(System.getProperty("dse", "false"));
+        String dseProperty = System.getProperty("dse");
+        // If -Ddse, if the value is empty interpret it as enabled,
+        // otherwise if there is a value, parse as boolean.
+        IS_DSE = dseProperty != null && (dseProperty.isEmpty() || Boolean.parseBoolean(dseProperty));
 
         StringBuilder installArgs = new StringBuilder();
         if (installDirectory != null && !installDirectory.trim().isEmpty()) {
