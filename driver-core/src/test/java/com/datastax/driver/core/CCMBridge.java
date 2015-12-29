@@ -337,9 +337,14 @@ public class CCMBridge {
         execute(CCM_COMMAND + " node%d start --wait-other-notice --wait-for-binary-proto", n);
     }
 
-    public void start(int n, String jvmArg) {
-        logger.info("Starting: " + IP_PREFIX + n + " with " + jvmArg);
-        execute(CCM_COMMAND + " node%d start --wait-other-notice --wait-for-binary-proto --jvm_arg=%s", n, jvmArg);
+    public void start(int n, String... jvmArg) {
+        StringBuilder jvmArgs = new StringBuilder("");
+        for (int i = 0; i < jvmArg.length; i++) {
+            jvmArgs.append(" --jvm_arg=");
+            jvmArgs.append(jvmArg[i]);
+        }
+        logger.info("Starting: " + IP_PREFIX + n + " with " + jvmArgs);
+        execute(CCM_COMMAND + " node%d start --wait-other-notice --wait-for-binary-proto %s", n, jvmArgs.toString());
     }
 
     public void stop(int n) {

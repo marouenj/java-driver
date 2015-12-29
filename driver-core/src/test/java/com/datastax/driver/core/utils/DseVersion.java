@@ -29,15 +29,15 @@ public @interface DseVersion {
     /**
      * @return The major version required to execute this test, i.e. "4.8"
      */
-    public double major();
+    double major() default 0.0;
 
     /**
      * @return The minor version required to execute this test, i.e. "3"
      */
-    public int minor() default 0;
+    int minor() default 0;
 
     /**
      * @return The description returned if this version requirement is not met.
      */
-    public String description() default "Does not meet minimum version requirement.";
+    String description() default "Does not meet minimum version requirement.";
 }

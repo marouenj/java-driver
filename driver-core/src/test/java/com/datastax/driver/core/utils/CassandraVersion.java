@@ -29,15 +29,15 @@ public @interface CassandraVersion {
     /**
      * @return The major version required to execute this test, i.e. "2.0"
      */
-    public double major();
+    double major();
 
     /**
      * @return The minor version required to execute this test, i.e. "0"
      */
-    public int minor() default 0;
+    int minor() default 0;
 
     /**
      * @return The description returned if this version requirement is not met.
      */
-    public String description() default "Does not meet minimum version requirement.";
+    String description() default "Does not meet minimum version requirement.";
 }
