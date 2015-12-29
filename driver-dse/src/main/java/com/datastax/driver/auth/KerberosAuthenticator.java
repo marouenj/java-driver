@@ -20,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.security.auth.Subject;
+import javax.security.auth.login.Configuration;
 import javax.security.auth.login.LoginContext;
 import javax.security.auth.login.LoginException;
 import java.net.InetSocketAddress;
@@ -40,7 +41,14 @@ public class KerberosAuthenticator implements Authenticator {
 
     private final PrivilegedSaslClient saslClient;
 
+    private final Configuration loginConfiguration;
+
     public KerberosAuthenticator(InetSocketAddress host) {
+        this(host, null);
+    }
+
+    public KerberosAuthenticator(InetSocketAddress host, Configuration loginConfiguration) {
+        this.loginConfiguration = loginConfiguration;
         saslClient = new PrivilegedSaslClient(loginSubject(),
                 SUPPORTED_MECHANISMS,
                 null,
@@ -53,7 +61,7 @@ public class KerberosAuthenticator implements Authenticator {
     private Subject loginSubject() {
         Subject subject = new Subject();
         try {
-            LoginContext login = new LoginContext(JAAS_CONFIG_ENTRY, subject);
+            LoginContext login = new LoginContext(JAAS_CONFIG_ENTRY, subject, null, loginConfiguration);
             login.login();
             return subject;
         } catch (LoginException e) {

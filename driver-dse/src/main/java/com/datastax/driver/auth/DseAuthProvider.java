@@ -19,6 +19,7 @@ import com.datastax.driver.core.AuthProvider;
 import com.datastax.driver.core.Authenticator;
 import com.datastax.driver.core.exceptions.AuthenticationException;
 
+import javax.security.auth.login.Configuration;
 import java.net.InetSocketAddress;
 
 /**
@@ -32,7 +33,8 @@ import java.net.InetSocketAddress;
  * configuration file. The location of the file can be set using the
  * <code>java.security.auth.login.config</code> system property or by adding a
  * <code>login.config.url.n</code> entry in the <code>java.security</code> properties
- * file.
+ * file.  Alternatively a {@link Configuration} object can be provided to override the
+ * JAAS configuration programmatically.
  * <p/>
  * See the following documents for further details on the
  * <a href="https://docs.oracle.com/javase/6/docs/technotes/guides/security/jgss/tutorials/LoginConfigFile.html">JAAS Login Configuration File</a> and the
@@ -77,8 +79,19 @@ import java.net.InetSocketAddress;
  * </pre>
  */
 public class DseAuthProvider implements AuthProvider {
+
+    private final Configuration loginConfiguration;
+
+    public DseAuthProvider() {
+        this(null);
+    }
+
+    public DseAuthProvider(Configuration loginConfiguration) {
+        this.loginConfiguration = loginConfiguration;
+    }
+
     @Override
     public Authenticator newAuthenticator(InetSocketAddress host) throws AuthenticationException {
-        return new KerberosAuthenticator(host);
+        return new KerberosAuthenticator(host, loginConfiguration);
     }
 }
