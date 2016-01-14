@@ -4,6 +4,7 @@
 
 - [bug] JAVA-1034: fix metadata parser for collections of custom types.
 - [improvement] JAVA-1035: Expose host broadcast_address and listen_address if available.
+- [improvement] JAVA-1033: Allow per-statement read timeout.
 
 Merged from 2.1 branch:
 
