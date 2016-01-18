@@ -23,7 +23,7 @@ import java.util.Map;
 import static com.datastax.driver.core.Assertions.assertThat;
 import static com.datastax.driver.core.CreateCCM.TestMode.PER_METHOD;
 import static com.datastax.driver.core.TestUtils.nonDebouncingQueryOptions;
-import static com.datastax.driver.core.TestUtils.waitFor;
+import static com.datastax.driver.core.TestUtils.waitForUp;
 
 @CreateCCM(PER_METHOD)
 public class MetadataTest extends CCMTestsSupport {
@@ -89,7 +89,7 @@ public class MetadataTest extends CCMTestsSupport {
         // Add an additional node.
         ccm.add(4);
         ccm.start(4);
-        waitFor(TestUtils.IP_PREFIX + '4', cluster);
+        waitForUp(TestUtils.IP_PREFIX + '4', cluster);
 
         // Ensure that the token ranges were updated, there should only be 3 ranges now.
         assertThat(metadata.getTokenRanges()).hasSize(3);

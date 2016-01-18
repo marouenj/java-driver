@@ -37,7 +37,18 @@ import static org.mockito.Mockito.times;
  * receivedResponses in primed responses.
  * If that becomes possible in the future, we could refactor this test.
  */
-@CCMConfig(dirtiesContext = true, createCluster = false, numberOfNodes = 3)
+@CCMConfig(
+        dirtiesContext = true,
+        createCluster = false,
+        numberOfNodes = 3,
+        config = {
+                // tests fail often with write or read timeouts
+                "hinted_handoff_enabled:true",
+                "phi_convict_threshold:5",
+                "read_request_timeout_in_ms:100000",
+                "write_request_timeout_in_ms:100000"
+        }
+)
 public class DowngradingConsistencyRetryPolicyIntegrationTest extends CCMTestsSupport {
 
     @Test(groups = "long")
@@ -81,7 +92,7 @@ public class DowngradingConsistencyRetryPolicyIntegrationTest extends CCMTestsSu
     private void stopAndWait(int node, Cluster cluster) {
         ccm.stop(node);
         ccm.waitForDown(node);// this uses port ping
-        TestUtils.waitForDown(ipOfNode(node), cluster, 10); // this uses UP/DOWN events
+        TestUtils.waitForDown(ipOfNode(node), cluster); // this uses UP/DOWN events
     }
 
     private void checkAchievedConsistency(ConsistencyLevel requested, ConsistencyLevel expected, Session session) {

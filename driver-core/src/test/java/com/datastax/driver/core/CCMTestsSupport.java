@@ -16,10 +16,12 @@
 package com.datastax.driver.core;
 
 import com.datastax.driver.core.CreateCCM.TestMode;
+import com.datastax.driver.core.exceptions.InvalidQueryException;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.io.Closer;
+import com.google.common.util.concurrent.Uninterruptibles;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testng.ITestResult;
@@ -36,6 +38,7 @@ import java.lang.reflect.ParameterizedType;
 import java.net.InetSocketAddress;
 import java.util.*;
 import java.util.concurrent.Callable;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.datastax.driver.core.CreateCCM.TestMode.PER_CLASS;
@@ -281,7 +284,7 @@ public class CCMTestsSupport {
         @SuppressWarnings("SimplifiableIfStatement")
         private Map<String, Object> config() {
             Map<String, Object> config = new HashMap<String, Object>();
-            for (int i = annotations.size() - 1; i == 0; i--) {
+            for (int i = annotations.size() - 1; i >= 0; i--) {
                 CCMConfig ann = annotations.get(i);
                 addConfigOptions(ann.config(), config);
             }
@@ -679,6 +682,27 @@ public class CCMTestsSupport {
         return closeable;
     }
 
+    /**
+     * Tests fail randomly with InvalidQueryException: Keyspace 'xxx' does not exist;
+     * this method tries at most 3 times to issue a successful USE statement.
+     *
+     * @param ks The keyspace to use
+     */
+    public void useKeyspace(String ks) {
+        final int maxTries = 3;
+        for (int i = 1; i <= maxTries; i++) {
+            try {
+                session.execute("USE " + ks);
+            } catch (InvalidQueryException e) {
+                if (i == maxTries)
+                    throw e;
+                LOGGER.error("Could not USE keyspace, retrying");
+                Uninterruptibles.sleepUninterruptibly(1, TimeUnit.MINUTES);
+            }
+        }
+    }
+
+
     private void initTestContext(Object testInstance, Method testMethod) throws Exception {
         erroredOut = false;
         ccmTestConfig = createCCMTestConfig(testInstance, testMethod);
@@ -724,7 +748,7 @@ public class CCMTestsSupport {
                 keyspace = TestUtils.getAvailableKeyspaceName();
                 LOGGER.debug("Using keyspace " + keyspace);
                 session.execute(String.format(CREATE_KEYSPACE_SIMPLE_FORMAT, keyspace, 1));
-                session.execute("USE " + keyspace);
+                useKeyspace(keyspace);
             } catch (Exception e) {
                 errorOut();
                 LOGGER.error("Could not create test keyspace", e);

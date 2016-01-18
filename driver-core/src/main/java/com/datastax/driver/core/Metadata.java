@@ -323,6 +323,7 @@ public class Metadata {
     }
 
     void triggerOnTableRemoved(TableMetadata table) {
+        logger.trace("triggerOnTableRemoved", new Exception());
         for (SchemaChangeListener listener : cluster.schemaChangeListeners) {
             listener.onTableRemoved(table);
         }

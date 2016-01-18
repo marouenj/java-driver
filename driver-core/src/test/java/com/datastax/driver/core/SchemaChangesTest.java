@@ -24,6 +24,7 @@ import org.mockito.ArgumentCaptor;
 import org.testng.annotations.*;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import static com.datastax.driver.core.Assertions.assertThat;
 import static com.datastax.driver.core.Metadata.handleId;
@@ -45,7 +46,7 @@ public class SchemaChangesTest extends CCMTestsSupport {
     /**
      * The maximum time that the test will wait to check that listeners have been notified
      */
-    private static final int NOTIF_TIMEOUT_MS = 120000;
+    private static final long NOTIF_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(1);
 
     Cluster cluster1;
     Cluster cluster2; // a second cluster to check that other clients also get notified
@@ -301,34 +302,43 @@ public class SchemaChangesTest extends CCMTestsSupport {
 
     @Test(groups = "short", dataProvider = "newKeyspaceName")
     public void should_notify_of_keyspace_drop(String keyspace) throws InterruptedException {
-        execute(CREATE_KEYSPACE, keyspace);
-        ArgumentCaptor<KeyspaceMetadata> added = null;
-        for (SchemaChangeListener listener : listeners) {
-            added = ArgumentCaptor.forClass(KeyspaceMetadata.class);
-            verify(listener, timeout(NOTIF_TIMEOUT_MS).times(1)).onKeyspaceAdded(added.capture());
-            assertThat(added.getValue()).hasName(handleId(keyspace));
-        }
-        assert added != null;
-        refreshSchema();
-        for (Metadata m : metadatas())
-            assertThat(m.getReplicas(keyspace, Bytes.fromHexString("0xCAFEBABE"))).isNotEmpty();
-        execute(CREATE_TABLE, keyspace); // to test table drop notifications
-        execute(DROP_KEYSPACE, keyspace);
-        for (SchemaChangeListener listener : listeners) {
-            ArgumentCaptor<TableMetadata> table = ArgumentCaptor.forClass(TableMetadata.class);
-            verify(listener, timeout(NOTIF_TIMEOUT_MS).times(1)).onTableRemoved(table.capture());
-            assertThat(table.getValue())
-                    .hasName("table1")
-                    .isInKeyspace(handleId(keyspace));
-            ArgumentCaptor<KeyspaceMetadata> ks = ArgumentCaptor.forClass(KeyspaceMetadata.class);
-            verify(listener, timeout(NOTIF_TIMEOUT_MS).times(1)).onKeyspaceRemoved(ks.capture());
-            assertThat(ks.getValue())
-                    .hasName(handleId(keyspace));
-        }
-        refreshSchema();
-        for (Metadata m : metadatas()) {
-            assertThat(m.getKeyspace(keyspace)).isNull();
-            assertThat(m.getReplicas(keyspace, Bytes.fromHexString("0xCAFEBABE"))).isEmpty();
+        try {
+            Cluster.DEBUG = true;
+            execute(CREATE_KEYSPACE, keyspace);
+            System.out.println("ks created");
+            ArgumentCaptor<KeyspaceMetadata> added = null;
+            for (SchemaChangeListener listener : listeners) {
+                added = ArgumentCaptor.forClass(KeyspaceMetadata.class);
+                verify(listener, timeout(NOTIF_TIMEOUT_MS).times(1)).onKeyspaceAdded(added.capture());
+                assertThat(added.getValue()).hasName(handleId(keyspace));
+            }
+            assert added != null;
+            refreshSchema();
+            for (Metadata m : metadatas())
+                assertThat(m.getReplicas(keyspace, Bytes.fromHexString("0xCAFEBABE"))).isNotEmpty();
+            execute(CREATE_TABLE, keyspace); // to test table drop notifications
+            System.out.println("table created");
+            execute(DROP_KEYSPACE, keyspace);
+            System.out.println("ks dropped");
+            for (SchemaChangeListener listener : listeners) {
+                ArgumentCaptor<TableMetadata> table = ArgumentCaptor.forClass(TableMetadata.class);
+                System.out.println("before verify onTableRemoved");
+                verify(listener, timeout(NOTIF_TIMEOUT_MS).times(1)).onTableRemoved(table.capture());
+                assertThat(table.getValue())
+                        .hasName("table1")
+                        .isInKeyspace(handleId(keyspace));
+                ArgumentCaptor<KeyspaceMetadata> ks = ArgumentCaptor.forClass(KeyspaceMetadata.class);
+                verify(listener, timeout(NOTIF_TIMEOUT_MS).times(1)).onKeyspaceRemoved(ks.capture());
+                assertThat(ks.getValue())
+                        .hasName(handleId(keyspace));
+            }
+            refreshSchema();
+            for (Metadata m : metadatas()) {
+                assertThat(m.getKeyspace(keyspace)).isNull();
+                assertThat(m.getReplicas(keyspace, Bytes.fromHexString("0xCAFEBABE"))).isEmpty();
+            }
+        } finally {
+            Cluster.DEBUG = false;
         }
     }
 

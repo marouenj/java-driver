@@ -43,6 +43,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
+import static com.datastax.driver.core.ConditionChecker.check;
+import static java.util.concurrent.TimeUnit.MINUTES;
+import static java.util.concurrent.TimeUnit.SECONDS;
+
 /**
  * A number of static fields/methods handy for tests.
  */
@@ -304,28 +308,20 @@ public abstract class TestUtils {
     // Wait for a node to be up and running
     // This is used because there is some delay between when a node has been
     // added through ccm and when it's actually available for querying
-    public static void waitFor(String node, Cluster cluster) {
+    public static void waitForUp(String node, Cluster cluster) {
         waitFor(node, cluster, TEST_BASE_NODE_WAIT, false);
     }
 
-    public static void waitFor(String node, Cluster cluster, int maxTry) {
-        waitFor(node, cluster, maxTry, false);
+    public static void waitForUp(String node, Cluster cluster, int timeoutSeconds) {
+        waitFor(node, cluster, timeoutSeconds, false);
     }
 
     public static void waitForDown(String node, Cluster cluster) {
         waitFor(node, cluster, TEST_BASE_NODE_WAIT * 3, true);
     }
 
-    public static void waitForDown(String node, Cluster cluster, int maxTry) {
-        waitFor(node, cluster, maxTry, true);
-    }
-
-    public static void waitForDecommission(String node, Cluster cluster) {
-        waitFor(node, cluster, TEST_BASE_NODE_WAIT / 2, true);
-    }
-
-    public static void waitForDecommission(String node, Cluster cluster, int maxTry) {
-        waitFor(node, cluster, maxTry, true);
+    public static void waitForDown(String node, Cluster cluster, int timeoutSeconds) {
+        waitFor(node, cluster, timeoutSeconds, true);
     }
 
     private static void waitFor(String node, Cluster cluster, int timeoutSeconds, boolean waitForDown) {
@@ -337,23 +333,30 @@ public abstract class TestUtils {
         // tried doing an actual query, the driver won't realize that last node is dead until
         // keep alive kicks in, but that's a fairly long time. So we cheat and trigger a force
         // the detection by forcing a request.
-        if (waitForDown) {
+        if (waitForDown)
             Futures.getUnchecked(cluster.manager.submitSchemaRefresh(null, null, null));
-        }
         if (waitForDown) {
-            ConditionChecker.awaitUntil(new HostIsDownCondition(cluster, node), timeoutSeconds * 1000);
+            check()
+                    .every(1, SECONDS)
+                    .before(timeoutSeconds, SECONDS)
+                    .that(new HostIsDown(cluster, node))
+                    .becomesTrue();
         } else {
-            ConditionChecker.awaitUntil(new HostIsUpCondition(cluster, node), timeoutSeconds * 1000);
+            check()
+                    .every(1, SECONDS)
+                    .before(timeoutSeconds, SECONDS)
+                    .that(new HostIsUp(cluster, node))
+                    .becomesTrue();
         }
     }
 
-    private static class HostIsDownCondition implements Callable<Boolean> {
+    private static class HostIsDown implements Callable<Boolean> {
 
         private final Cluster cluster;
 
         private final String ip;
 
-        public HostIsDownCondition(Cluster cluster, String ip) {
+        public HostIsDown(Cluster cluster, String ip) {
             this.cluster = cluster;
             this.ip = ip;
         }
@@ -365,13 +368,13 @@ public abstract class TestUtils {
         }
     }
 
-    private static class HostIsUpCondition implements Callable<Boolean> {
+    private static class HostIsUp implements Callable<Boolean> {
 
         private final Cluster cluster;
 
         private final String ip;
 
-        public HostIsUpCondition(Cluster cluster, String ip) {
+        public HostIsUp(Cluster cluster, String ip) {
             this.cluster = cluster;
             this.ip = ip;
         }
@@ -534,11 +537,11 @@ public abstract class TestUtils {
     };
 
     public static void waitUntilPortIsUp(InetSocketAddress address) {
-        ConditionChecker.awaitUntil(address, PORT_IS_UP, TimeUnit.SECONDS.toMillis(10));
+        check().before(5, MINUTES).that(address, PORT_IS_UP).becomesTrue();
     }
 
     public static void waitUntilPortIsDown(InetSocketAddress address) {
-        ConditionChecker.awaitWhile(address, PORT_IS_UP, TimeUnit.SECONDS.toMillis(10));
+        check().before(5, MINUTES).that(address, PORT_IS_UP).becomesFalse();
     }
 
     public static boolean pingPort(InetAddress address, int port) {
@@ -608,7 +611,7 @@ public abstract class TestUtils {
     public static NettyOptions nonQuietClusterCloseOptions = new NettyOptions() {
         @Override
         public void onClusterClose(EventLoopGroup eventLoopGroup) {
-            eventLoopGroup.shutdownGracefully(0, 15, TimeUnit.SECONDS).syncUninterruptibly();
+            eventLoopGroup.shutdownGracefully(0, 15, SECONDS).syncUninterruptibly();
         }
     };
 

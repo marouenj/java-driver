@@ -28,7 +28,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -36,6 +35,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
 
 public class EventDebouncerTest {
 
@@ -76,7 +76,6 @@ public class EventDebouncerTest {
         }
         callback.awaitEvents(50);
         assertThat(callback.getEvents()).isEqualTo(events);
-        assertThat(callback.getInvocations()).isEqualTo(1);
     }
 
     @Test(groups = "unit")
@@ -124,7 +123,6 @@ public class EventDebouncerTest {
 
         callback.awaitEvents(50);
         assertThat(callback.getEvents()).isEqualTo(events);
-        assertThat(callback.getInvocations()).isEqualTo(1);
     }
 
     @Test(groups = "unit")
@@ -147,7 +145,6 @@ public class EventDebouncerTest {
         pool.shutdownNow();
         callback.awaitEvents(50);
         assertThat(callback.getEvents()).hasSize(50);
-        assertThat(callback.getInvocations()).isEqualTo(1);
     }
 
     @Test(groups = "unit")
@@ -163,7 +160,6 @@ public class EventDebouncerTest {
         MockEvent event = new MockEvent(0);
         debouncer.eventReceived(event);
         assertThat(callback.getEvents()).hasSize(50);
-        assertThat(callback.getInvocations()).isEqualTo(1);
     }
 
     private static class MockDeliveryCallback implements DeliveryCallback<MockEvent> {
@@ -174,14 +170,13 @@ public class EventDebouncerTest {
 
         final Condition cond = lock.newCondition();
 
-        final AtomicInteger invocations = new AtomicInteger(0);
-
         @Override
         public ListenableFuture<?> deliver(List<MockEvent> events) {
             lock.lock();
             try {
+                System.out.println("deliver " + events.size());
                 this.events.addAll(events);
-                invocations.incrementAndGet();
+                System.out.println("events received " + this.events.size());
                 cond.signal();
             } finally {
                 lock.unlock();
@@ -195,7 +190,7 @@ public class EventDebouncerTest {
             try {
                 while (events.size() < expected) {
                     if (nanos <= 0L)
-                        break; // timeout
+                        fail("Timed out waiting for events");
                     nanos = cond.awaitNanos(nanos);
                 }
             } finally {
@@ -207,9 +202,6 @@ public class EventDebouncerTest {
             return events;
         }
 
-        public int getInvocations() {
-            return invocations.get();
-        }
     }
 
     private class MockEvent {

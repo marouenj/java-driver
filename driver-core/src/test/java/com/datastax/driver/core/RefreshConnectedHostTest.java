@@ -82,7 +82,7 @@ public class RefreshConnectedHostTest extends CCMTestsSupport {
 
         // Kill host 2, host 3 should take its place
         ccm.stop(2);
-        TestUtils.waitFor(TestUtils.ipOfNode(3), cluster);
+        TestUtils.waitForUp(TestUtils.ipOfNode(3), cluster);
 
         assertThat(cluster).host(1)
                 .hasState(State.UP)

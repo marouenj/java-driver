@@ -80,6 +80,8 @@ public class Cluster implements Closeable {
 
     private static final int NOTIF_LOCK_TIMEOUT_SECONDS = SystemProperties.getInt("com.datastax.driver.NOTIF_LOCK_TIMEOUT_SECONDS", 60);
 
+    static boolean DEBUG = false;
+
     final Manager manager;
 
     /**
@@ -2230,6 +2232,8 @@ public class Cluster implements Closeable {
         ListenableFuture<Void> submitSchemaRefresh(final SchemaElement targetType, final String targetKeyspace, final String targetName) {
             SchemaRefreshRequest request = new SchemaRefreshRequest(targetType, targetKeyspace, targetName);
             logger.trace("Submitting schema refresh: {}", request);
+            if (DEBUG)
+                System.out.println(clusterName + " Submitting schema refresh: " + request);
             return schemaRefreshRequestDebouncer.eventReceived(request);
         }
 
@@ -2341,6 +2345,8 @@ public class Cluster implements Closeable {
                         return;
 
                     ProtocolEvent.SchemaChange scc = (ProtocolEvent.SchemaChange) event;
+                    if (DEBUG)
+                        System.out.println(clusterName + " " + scc);
                     switch (scc.change) {
                         case CREATED:
                         case UPDATED:
@@ -2548,6 +2554,8 @@ public class Cluster implements Closeable {
                         }
                         assert coalesced != null;
                         logger.trace("Coalesced schema refresh request: {}", coalesced);
+                        if (DEBUG)
+                            System.out.println(clusterName + " Coalesced schema refresh request: " + coalesced);
                         controlConnection.refreshSchema(coalesced.targetType, coalesced.targetKeyspace, coalesced.targetName);
                     }
                 });
