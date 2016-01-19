@@ -56,12 +56,27 @@ public class SimpleStatementIntegrationTest extends CCMTestsSupport {
     public void should_fail_if_query_with_named_values_but_missing_parameter() {
         // Given a Statement missing named parameters.
         SimpleStatement statement = new SimpleStatement("SELECT * FROM users WHERE id = :id and id2 = :id2",
-                ImmutableMap.of("id2", 2));
+                ImmutableMap.<String, Object>of("id2", 2));
 
         // When
         session.execute(statement).one();
 
-        // Then - Should throw InvalidQueryException.
+        // Then - The driver does allow this because it doesn't know what parameters are required, but C* should
+        //        throw an InvalidQueryException.
+    }
+
+    @Test(groups = "short", expectedExceptions = InvalidQueryException.class)
+    @CassandraVersion(major = 2.0)
+    public void should_fail_if_query_with_named_values_but_using_wrong_type() {
+        // Given a Statement using a named parameter with the wrong value for the type (id is of type int, using double)
+        SimpleStatement statement = new SimpleStatement("SELECT * FROM users WHERE id = :id and id2 = :id2",
+                ImmutableMap.<String, Object>of("id", 2.7, "id2", 2));
+
+        // When
+        session.execute(statement).one();
+
+        // Then - The driver does allow this because it doesn't know the type information, but C* should throw an
+        //        InvalidQueryException.
     }
 
     @Test(groups = "short", expectedExceptions = UnsupportedFeatureException.class)
