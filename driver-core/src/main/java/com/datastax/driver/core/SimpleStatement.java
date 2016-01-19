@@ -18,6 +18,8 @@ package com.datastax.driver.core;
 import com.datastax.driver.core.exceptions.InvalidTypeException;
 
 import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * A simple {@code RegularStatement} implementation built directly from a query
@@ -27,6 +29,7 @@ public class SimpleStatement extends RegularStatement {
 
     private final String query;
     private final Object[] values;
+    private final Map<String, Object> namedValues;
 
     private volatile ByteBuffer routingKey;
     private volatile String keyspace;
@@ -88,6 +91,29 @@ public class SimpleStatement extends RegularStatement {
             throw new IllegalArgumentException("Too many values, the maximum allowed is 65535");
         this.query = query;
         this.values = values;
+        this.namedValues = null;
+    }
+
+    /**
+     * Creates a new {@code SimpleStatement} with the provided query string and named values.
+     * <p/>
+     * This version requires that the query string use named placeholders, for example:
+     * <pre>{@code
+     * new SimpleStatement("SELECT * FROM users WHERE id = :i", ImmutableMap.<String, Object>of("i", 1));}
+     * </pre>
+     * The type of the values will be handled the same way as with anonymous placeholders (see
+     * {@link #SimpleStatement(String, Object...)}).
+     *
+     * @param query  the query string.
+     * @param values named values required for the execution of {@code query}.
+     * @throws IllegalArgumentException if the number of values is greater than 65535.
+     */
+    public SimpleStatement(String query, Map<String, Object> values) {
+        if (values.size() > 65535)
+            throw new IllegalArgumentException("Too many values, the maximum allowed is 65535");
+        this.query = query;
+        this.values = null;
+        this.namedValues = values;
     }
 
     @Override
@@ -102,6 +128,13 @@ public class SimpleStatement extends RegularStatement {
         return convert(values, protocolVersion, codecRegistry);
     }
 
+    @Override
+    public Map<String, ByteBuffer> getNamedValues(ProtocolVersion protocolVersion, CodecRegistry codecRegistry) {
+        if (namedValues == null)
+            return null;
+        return convert(namedValues, protocolVersion, codecRegistry);
+    }
+
     /**
      * The number of values for this statement, that is the size of the array
      * that will be returned by {@code getValues}.
@@ -109,12 +142,23 @@ public class SimpleStatement extends RegularStatement {
      * @return the number of values.
      */
     public int valuesCount() {
-        return values == null ? 0 : values.length;
+        if (values != null)
+            return values.length;
+        else if (namedValues != null)
+            return namedValues.size();
+        else
+            return 0;
     }
 
     @Override
     public boolean hasValues(CodecRegistry codecRegistry) {
-        return values != null && values.length > 0;
+        return (values != null && values.length > 0)
+                || (namedValues != null && namedValues.size() > 0);
+    }
+
+    @Override
+    public boolean usesNamedValues() {
+        return namedValues != null && namedValues.size() > 0;
     }
 
     /**
@@ -224,27 +268,7 @@ public class SimpleStatement extends RegularStatement {
         return this;
     }
 
-    /**
-     * <p/>
-     * Utility method to serialize user-provided values.
-     * <p/>
-     * This method is useful in situations where there is no metadata available and the underlying CQL
-     * type for the values is not known.
-     * <p/>
-     * This situation happens when a {@link SimpleStatement}
-     * or a {@link com.datastax.driver.core.querybuilder.BuiltStatement} (Query Builder) contain values;
-     * in these places, the driver has no way to determine the right CQL type to use.
-     * <p/>
-     * This method performs a best-effort heuristic to guess which codec to use.
-     * Note that this is not particularly efficient as the codec registry needs to iterate over
-     * the registered codecs until it finds a suitable one.
-     *
-     * @param values          The values to convert.
-     * @param protocolVersion The protocol version to use.
-     * @param codecRegistry   The {@link CodecRegistry} to use.
-     * @return The converted values.
-     */
-    public static ByteBuffer[] convert(Object[] values, ProtocolVersion protocolVersion, CodecRegistry codecRegistry) {
+    private static ByteBuffer[] convert(Object[] values, ProtocolVersion protocolVersion, CodecRegistry codecRegistry) {
         ByteBuffer[] serializedValues = new ByteBuffer[values.length];
         for (int i = 0; i < values.length; i++) {
             Object value = values[i];
@@ -263,6 +287,33 @@ public class SimpleStatement extends RegularStatement {
                     } catch (Exception e) {
                         // Catch and rethrow to provide a more helpful error message (one that include which value is bad)
                         throw new InvalidTypeException(String.format("Value %d of type %s does not correspond to any CQL3 type", i, value.getClass()), e);
+                    }
+                }
+            }
+        }
+        return serializedValues;
+    }
+
+    private static Map<String, ByteBuffer> convert(Map<String, Object> values, ProtocolVersion protocolVersion, CodecRegistry codecRegistry) {
+        Map<String, ByteBuffer> serializedValues = new HashMap<String, ByteBuffer>();
+        for (Map.Entry<String, Object> entry : values.entrySet()) {
+            String name = entry.getKey();
+            Object value = entry.getValue();
+            if (value == null) {
+                // impossible to locate the right codec when object is null,
+                // so forcing the result to null
+                serializedValues.put(name, null);
+            } else {
+                if (value instanceof Token) {
+                    // bypass CodecRegistry for Token instances
+                    serializedValues.put(name, ((Token) value).serialize(protocolVersion));
+                } else {
+                    try {
+                        TypeCodec<Object> codec = codecRegistry.codecFor(value);
+                        serializedValues.put(name, codec.serialize(value, protocolVersion));
+                    } catch (Exception e) {
+                        // Catch and rethrow to provide a more helpful error message (one that include which value is bad)
+                        throw new InvalidTypeException(String.format("Value '%s' of type %s does not correspond to any CQL3 type", name, value.getClass()), e);
                     }
                 }
             }
