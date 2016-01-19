@@ -69,11 +69,11 @@ public class SimpleStatement extends RegularStatement {
      * server side) once it has been executed.</li>
      * </ul>
      * <p/>
-     * Note that the type of the {@code values} provided to this method will
+     * Note that the types of the {@code values} provided to this method will
      * not be validated by the driver as is done by {@link BoundStatement#bind} since
-     * {@code query} is not parsed (and hence the driver cannot know what those value
+     * {@code query} is not parsed (and hence the driver cannot know what those values
      * should be). The codec to serialize each value will be chosen in the codec registry
-     * associated with this session's cluster, based on the value's Java type
+     * associated with the cluster executing this statement, based on the value's Java type
      * (this is the equivalent to calling {@link CodecRegistry#codecFor(Object)}).
      * If too many or too few values are provided, or if a value is not a valid one for
      * the variable it is bound to, an
@@ -97,11 +97,11 @@ public class SimpleStatement extends RegularStatement {
     /**
      * Creates a new {@code SimpleStatement} with the provided query string and named values.
      * <p/>
-     * This version requires that the query string use named placeholders, for example:
+     * This constructor requires that the query string use named placeholders, for example:
      * <pre>{@code
      * new SimpleStatement("SELECT * FROM users WHERE id = :i", ImmutableMap.<String, Object>of("i", 1));}
      * </pre>
-     * The type of the values will be handled the same way as with anonymous placeholders (see
+     * The types of the values will be handled the same way as with anonymous placeholders (see
      * {@link #SimpleStatement(String, Object...)}).
      *
      * @param query  the query string.
@@ -268,6 +268,11 @@ public class SimpleStatement extends RegularStatement {
         return this;
     }
 
+    /*
+     * This method performs a best-effort heuristic to guess which codec to use.
+     * Note that this is not particularly efficient as the codec registry needs to iterate over
+     * the registered codecs until it finds a suitable one.
+     */
     private static ByteBuffer[] convert(Object[] values, ProtocolVersion protocolVersion, CodecRegistry codecRegistry) {
         ByteBuffer[] serializedValues = new ByteBuffer[values.length];
         for (int i = 0; i < values.length; i++) {

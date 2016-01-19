@@ -359,7 +359,8 @@ class Requests {
 
         @Override
         public String toString() {
-            return String.format("[cl=%s, vals=%s, skip=%b, psize=%d, state=%s, serialCl=%s]", consistency, positionalValues, skipMetadata, pageSize, pagingState, serialConsistency);
+            return String.format("[cl=%s, positionalVals=%s, namedVals=%s, skip=%b, psize=%d, state=%s, serialCl=%s]",
+                    consistency, positionalValues, namedValues, skipMetadata, pageSize, pagingState, serialConsistency);
         }
     }
 

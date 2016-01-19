@@ -81,10 +81,10 @@ public abstract class RegularStatement extends Statement {
      * A statement can use either positional or named values, but not both. So if this method returns a non-null result,
      * {@link #getNamedValues(ProtocolVersion, CodecRegistry)} will return {@code null}.
      * <p/>
-     * Values for a RegularStatement (i.e. if this method does not return
+     * Values for a RegularStatement (i.e. if either method does not return
      * {@code null}) are not supported with the native protocol version 1: you
      * will get an {@link UnsupportedProtocolVersionException} when submitting
-     * one if version 1 of the protocol is in use (i.e. if you've force version
+     * one if version 1 of the protocol is in use (i.e. if you've forced version
      * 1 through {@link Cluster.Builder#withProtocolVersion} or you use
      * Cassandra 1.2).
      *
@@ -104,10 +104,10 @@ public abstract class RegularStatement extends Statement {
      * A statement can use either positional or named values, but not both. So if this method returns a non-null result,
      * {@link #getValues(ProtocolVersion, CodecRegistry)} will return {@code null}.
      * <p/>
-     * Values for a RegularStatement (i.e. if this method does not return
+     * Values for a RegularStatement (i.e. if either method does not return
      * {@code null}) are not supported with the native protocol version 1: you
      * will get an {@link UnsupportedProtocolVersionException} when submitting
-     * one if version 1 of the protocol is in use (i.e. if you've force version
+     * one if version 1 of the protocol is in use (i.e. if you've forced version
      * 1 through {@link Cluster.Builder#withProtocolVersion} or you use
      * Cassandra 1.2).
      *
