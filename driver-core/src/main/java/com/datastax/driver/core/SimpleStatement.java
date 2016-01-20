@@ -103,6 +103,10 @@ public class SimpleStatement extends RegularStatement {
      * </pre>
      * The types of the values will be handled the same way as with anonymous placeholders (see
      * {@link #SimpleStatement(String, Object...)}).
+     * <p/>
+     * Simple statements with named values are only supported starting with native protocol
+     * {@link ProtocolVersion#V3 v3}. With earlier versions, an
+     * {@link com.datastax.driver.core.exceptions.UnsupportedFeatureException} will be thrown at execution time.
      *
      * @param query  the query string.
      * @param values named values required for the execution of {@code query}.

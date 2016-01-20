@@ -551,6 +551,9 @@ class SessionManager extends AbstractSession {
             if (protocolVersion == ProtocolVersion.V1 && (rawPositionalValues != null || rawNamedValues != null))
                 throw new UnsupportedFeatureException(protocolVersion, "Binary values are not supported");
 
+            if (protocolVersion == ProtocolVersion.V2 && rawNamedValues != null)
+                throw new UnsupportedFeatureException(protocolVersion, "Named values are not supported");
+
             List<ByteBuffer> positionalValues = rawPositionalValues == null ? Collections.<ByteBuffer>emptyList() : Arrays.asList(rawPositionalValues);
             Map<String, ByteBuffer> namedValues = rawNamedValues == null ? Collections.<String, ByteBuffer>emptyMap() : rawNamedValues;
 

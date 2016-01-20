@@ -307,10 +307,12 @@ class Requests {
                     CBUtil.writeConsistencyLevel(consistency, dest);
                     dest.writeByte((byte) QueryFlag.serialize(flags));
                     if (flags.contains(QueryFlag.VALUES)) {
-                        if (flags.contains(QueryFlag.VALUE_NAMES))
+                        if (flags.contains(QueryFlag.VALUE_NAMES)) {
+                            assert version.compareTo(ProtocolVersion.V3) >= 0;
                             CBUtil.writeNamedValueList(namedValues, dest);
-                        else
+                        } else {
                             CBUtil.writeValueList(positionalValues, dest);
+                        }
                     }
                     if (flags.contains(QueryFlag.PAGE_SIZE))
                         dest.writeInt(pageSize);
@@ -338,10 +340,12 @@ class Requests {
                     size += CBUtil.sizeOfConsistencyLevel(consistency);
                     size += 1; // flags
                     if (flags.contains(QueryFlag.VALUES)) {
-                        if (flags.contains(QueryFlag.VALUE_NAMES))
+                        if (flags.contains(QueryFlag.VALUE_NAMES)) {
+                            assert version.compareTo(ProtocolVersion.V3) >= 0;
                             size += CBUtil.sizeOfNamedValueList(namedValues);
-                        else
+                        } else {
                             size += CBUtil.sizeOfValueList(positionalValues);
+                        }
                     }
                     if (flags.contains(QueryFlag.PAGE_SIZE))
                         size += 4;
