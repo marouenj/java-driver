@@ -169,7 +169,7 @@ class EventDebouncer<T> {
         while (state == State.RUNNING) {
             DeliveryAttempt previous = immediateDelivery.get();
             if (previous != null && !previous.isDone())
-                return;
+                previous.cancel();
 
             DeliveryAttempt current = new DeliveryAttempt();
             if (immediateDelivery.compareAndSet(previous, current)) {
