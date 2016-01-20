@@ -2,6 +2,7 @@
 
 ### 2.1.10 (in progress)
 
+- [bug] JAVA-1039: Minor bugs in Event Debouncer.
 - [bug] JAVA-988: Metadata.handleId should handle escaped double quotes.
 - [bug] JAVA-983: QueryBuilder cannot handle collections containing function calls.
 - [improvement] JAVA-863: Idempotence propagation in PreparedStatements.
