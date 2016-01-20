@@ -81,6 +81,14 @@ public class SimpleStatement extends RegularStatement {
      * by Cassandra at execution time. A {@code CodecNotFoundException} may be
      * thrown by this constructor however, if the codec registry does not know how to
      * handle one of the values.
+     * <p/>
+     * If you have a single value of type {@code Map<String, Object>}, you can't call this
+     * constructor using the varargs syntax, because the signature collides with
+     * {@link #SimpleStatement(String, Map)}. To prevent this, pass an explicit
+     * array object:
+     * <pre>
+     * new SimpleStatement("...", new Object[]{m});
+     * </pre>
      *
      * @param query  the query string.
      * @param values values required for the execution of {@code query}.
@@ -101,6 +109,9 @@ public class SimpleStatement extends RegularStatement {
      * <pre>{@code
      * new SimpleStatement("SELECT * FROM users WHERE id = :i", ImmutableMap.<String, Object>of("i", 1));}
      * </pre>
+     * Make sure that the map is correctly typed {@code Map<String, Object>}, otherwise you might
+     * accidentally call {@link #SimpleStatement(String, Object...)} with a positional value of type map.
+     * <p/>
      * The types of the values will be handled the same way as with anonymous placeholders (see
      * {@link #SimpleStatement(String, Object...)}).
      * <p/>
