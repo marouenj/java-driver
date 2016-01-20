@@ -129,12 +129,15 @@ class EventDebouncer<T> {
         int count = eventCount.incrementAndGet();
 
         // Safeguard against the queue filling up faster than we can process it
-        long now;
-        if (count > MAX_QUEUED_EVENTS && (now = System.nanoTime()) > lastOverflowWarning + OVERFLOW_WARNING_INTERVAL) {
-            lastOverflowWarning = now;
-            logger.warn("{} debouncer enqueued more than {} events, rejecting new events. "
+        if (count > MAX_QUEUED_EVENTS) {
+            long now = System.nanoTime();
+            if (now > lastOverflowWarning + OVERFLOW_WARNING_INTERVAL) {
+                lastOverflowWarning = now;
+                logger.warn("{} debouncer enqueued more than {} events, rejecting new events. "
                             + "This should not happen and is likely a sign that something is wrong.",
                     name, MAX_QUEUED_EVENTS);
+            }
+            eventCount.decrementAndGet();
             return MoreFutures.VOID_SUCCESS;
         }
 
