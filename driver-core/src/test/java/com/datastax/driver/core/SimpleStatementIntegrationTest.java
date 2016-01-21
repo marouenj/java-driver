@@ -38,13 +38,25 @@ public class SimpleStatementIntegrationTest extends CCMTestsSupport {
 
     @Test(groups = "short")
     @CassandraVersion(major = 2.1)
-    public void should_execute_query_with_named_values() {
-        // Given
+    public void should_execute_query_with_named_values_in_statement() {
+        // Given a statement with named values
         SimpleStatement statement = new SimpleStatement("SELECT * FROM users WHERE id = :id and id2 = :id2",
                 ImmutableMap.<String, Object>of("id", 1, "id2", 2));
 
         // When
         Row row = session.execute(statement).one();
+
+        // Then
+        assertThat(row).isNotNull();
+        assertThat(row.getString("name")).isEqualTo("test");
+    }
+
+    @Test(groups = "short")
+    @CassandraVersion(major = 2.1)
+    public void should_execute_query_with_named_values_in_execute() {
+        // When executing a query with named values.
+        Row row = session.execute("SELECT * FROM users WHERE id = :id and id2 = :id2",
+                ImmutableMap.<String, Object>of("id", 1, "id2", 2)).one();
 
         // Then
         assertThat(row).isNotNull();
