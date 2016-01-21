@@ -18,6 +18,8 @@ package com.datastax.driver.core;
 import com.datastax.driver.core.EventDebouncer.DeliveryCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -62,6 +64,33 @@ public class EventDebouncerTest {
         debouncer.eventReceived(event);
         callback.awaitEvents(1);
         assertThat(callback.getEvents()).containsOnly(event);
+    }
+
+    @Test(groups = "unit")
+    public void should_log_and_drop_events_on_overflow() throws InterruptedException {
+        MemoryAppender logs = new MemoryAppender();
+        Logger logger = Logger.getLogger(EventDebouncer.class);
+        Level originalLoggerLevel = logger.getLevel();
+        logger.setLevel(Level.WARN);
+        logger.addAppender(logs);
+        try {
+            EventDebouncer<MockEvent> debouncer = new EventDebouncer<MockEvent>("test", executor, callback, 100, 10005);
+            debouncer.start();
+            List<MockEvent> events = new ArrayList<MockEvent>();
+            for (int i = 0; i < 10004; i++) {
+                MockEvent event = new MockEvent(i);
+                events.add(event);
+                debouncer.eventReceived(event);
+            }
+            // Only 10000 events should have been handled.
+            callback.awaitEvents(10000);
+            assertThat(callback.getEvents()).isEqualTo(events.subList(0, 10000));
+            // Debouncer warning should have been logged, but only once.
+            assertThat(logs.get()).containsOnlyOnce("test debouncer enqueued more than 10000 events, rejecting new events.");
+        } finally {
+            logger.removeAppender(logs);
+            logger.setLevel(originalLoggerLevel);
+        }
     }
 
     @Test(groups = "unit")
